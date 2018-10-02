@@ -8,10 +8,10 @@ def parse_fname(filename, idx = 0):
     # get rid of the extension
     filename = '.'.join(filename.split('.')[:-1])
     filename = filename.split('_')
-    return {"attitude_ra": filename[2],
-            "attitude_de": filename[4],
-            "target_ra": filename[7],
-            "target_de": filename[9],
+    return {"attitude_ra": float(filename[2]),
+            "attitude_de": float(filename[4]),
+            "target_ra": float(filename[7]),
+            "target_de": float(filename[9]),
             "idx": idx}
 
 def read_dir(dir):

@@ -1,6 +1,24 @@
 #!/usr/bin/env python3
 import numpy as np
+from datetime import datetime
+from frame import Frame
+from interval import interval, inf, imath
+import math
 import cv2
+
+class Camera:
+    def __init__(self, _height=1944, _width=2592, _vfov=math.radians(10.69)):
+        self.height = _height
+        self.width = _width
+        self.vfov = _vfov
+        self.set_ifov()
+
+    def set_ifov(self):
+        self.ifov = float(self.vfov)/float(self.height)
+
+# Camera = namedtuple('Camera', ['height','width','vfov','ifov'])
+cam = Camera(1944, 2592, math.radians(10.69))
+# cam.ifov = get_ifov(cam.vfov, cam.height)
 
 class Centroid:
     # static variables for describing centroid state
@@ -10,27 +28,39 @@ class Centroid:
     S_STAR = -1
     S_UNKNOWN = 0
 
-    ERROR = 0.1
+    ERROR = 0.000001
 
-    def __init__(self, cx, cy, state=S_UNKNOWN):
+    def __init__(self, cx, cy, att=(0,0), state=S_UNKNOWN, frame_id=0):
         self.cX = cx
         self.cY = cy
-        # TODO: change the pixel data to angles based on camera intrinsics
+        # TODO: make it less naive and solve angle wrap
         # self.cRA, self.cDE
+        # TODO: this assumes att is the right bottom corner
+        # relative to the center of the frame
+        self.cRA = -(cx-cam.width/2)*cam.ifov + att[0]
+        self.cDE = -(cy-cam.height/2)*cam.ifov + att[1]
         self.state = state
+        self.frame_id = frame_id
 
     def equals(self, other):
         # TODO: make it about angles
-        return abs(self.cX-other.cX) <= self.ERROR and \
-                abs(self.cY-other.cY) <= self.ERROR
+        return abs(self.cRA-other.cRA) <= self.ERROR and \
+                abs(self.cDE-other.cDE) <= self.ERROR
 
+    # TODO: angle-wrapping
+    def is_in_interval(self, ra_int, de_int):
+        return (self.cRA in ra_int) and (self.DE in de_int)
 
-def find_centroids(img):
+    def get_pix(self):
+        return (self.cX, self.cY)
+
+def find_centroids(img_frame, camera=cam):
     # image is a numpy array
+    # camera is a named tuple (see above)
     # find contours in the binary image
     noise_level = 7
     minSNR = 3
-    ret, thresh = cv2.threshold(img, noise_level*minSNR, 255, 0)
+    ret, thresh = cv2.threshold(img_frame.px, noise_level*minSNR, 255, 0)
 
     im2, contours, hierarchy = cv2.findContours(thresh, cv2.RETR_TREE,
                     cv2.CHAIN_APPROX_SIMPLE)
@@ -42,29 +72,76 @@ def find_centroids(img):
         # calculate x,y coordinate of center
         cX = int(M["m10"] / M["m00"])
         cY = int(M["m01"] / M["m00"])
-        centers.append(Centroid(cX, cY))
+        centers.append(Centroid(cX, cY,
+                        att=(img_frame.attitude_ra, img_frame.attitude_de),
+                        frame_id=img_frame.id))
 
     return centers
 
 def compare_centroids(frame1, frame2):
-    candidates = []
-    for c2 in frame2:
-        c2.state += 1 # assume no equality
-        for c1 in frame1:
-            if c1.equals(c2):
-                if c2.state > Centroid.S_STAR + 1: # the one we added before
-                    c2.state -= 2 # drop 1 state overall
-                else:
-                    c2.state = Centroid.S_STAR # equivalent of dropping by 1
+    # check if same between frames but also in intersection of frames
+    # TODO: make this independent function
+    frame_width = cam.width*cam.ifov
+    frame_height = cam.width*cam.ifov
 
-        if c2.state >= Centroid.S_CANDIDATE:
-            candidates.append(c2)
+    ra_int_1 = interval[frame1.attitude_ra-frame_width/2,
+                frame1.attitude_ra+frame_width/2]
+    de_int_1 = interval[frame1.attitude_de-frame_height/2,
+                frame1.attitude_de+frame_height/2]
+    ra_int_2 = interval[frame2.attitude_ra-frame_width/2,
+                frame2.attitude_ra+frame_width/2]
+    de_int_2 = interval[frame2.attitude_de-frame_height/2,
+                frame2.attitude_de+frame_height/2]
+
+    ra_intrsc = ra_int_1&ra_int_2
+    de_intrsc = de_int_1&de_int_2
+
+    # Union of frames (TODO: Implement kd tree maybe)
+    union = list(frame1)
+    for new in frame2:
+        found = False
+        # c2.state += 1 # assume no match
+        for old in union:
+            if old.equals(new):
+                if old.state > Centroid.S_STAR: # the one we added before
+                    old.state -= 1 # drop 1 state overall
+                found = True
+                break
+                    # c1.state = Centroid.S_STAR # equivalent of dropping by 1
+        if found == False:
+            # add candidate to union
+            # Shouldn't go higher than this state
+            # if c2.state > Centroid.S_TARGET:
+                # c2.state = Centroid.S_TARGET
+
+            if new.state < Centroid.S_CANDIDATE \
+                and new.is_in_interval(ra_intrsc, de_intrsc):
+                new.state += 1
+            union.append(new)
+
+        # Return if candidate
+        # if c2.state >= Centroid.S_CANDIDATE:
+            # candidates.append(c2)
+        # Or return all
+    return union
+
+def find_candidates(centroids):
+    candidates = []
+    for c in centroids:
+        if c.state == Centroid.S_CANDIDATE:
+            candidates.append(c)
     return candidates
 
+def find_stars(centroids):
+    stars = []
+    for c in centroids:
+        if c.state == Centroid.S_STAR:
+            stars.append(c)
+    return stars
 
-def plot_centroids(img, centroids):
+def plot_centroids(input_img, centroids, write=False):
 
-    img = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
+    img = cv2.cvtColor(input_img, cv2.COLOR_GRAY2BGR)
 
     for c in centroids:
         if c.state == Centroid.S_STAR:
@@ -87,10 +164,13 @@ def plot_centroids(img, centroids):
     # display the image
     cv2.imshow("Image", img)
     cv2.waitKey(0)
+    if write:
+        cv2.imwrite(str(datetime.now())+".png", img)
 
 if __name__=='__main__':
     import image_read
-    imgs, dct = image_read.read_dir('./test')
-    centroids = list(map(find_centroids,imgs))
+    # imgs, dct = image_read.read_dir('./test')
+    # centroids = list(map(find_centroids,imgs))
     # map(lambda img, cntr: plot_centoids(img, cntr), imgs, centroids)
-    plot_centroids(imgs[0], centroids[0])
+    # plot_centroids(imgs[0], centroids[0])
+    print(cam.ifov)

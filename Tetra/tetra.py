@@ -34,8 +34,8 @@ import glob
 import cv2 as cv
 
 # directory containing input images
-# image_directory = '../pics'
-image_directory = '../test'
+image_directory = '../pics'
+# image_directory = '../test'
 
 # filepath of catalog
 catalog_dir = './BSC5'
