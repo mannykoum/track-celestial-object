@@ -49,7 +49,7 @@ class Centroid:
 
     # TODO: angle-wrapping
     def is_in_interval(self, ra_int, de_int):
-        return (self.cRA in ra_int) and (self.DE in de_int)
+        return (self.cRA in ra_int) and (self.cDE in de_int)
 
     def get_pix(self):
         return (self.cX, self.cY)
@@ -79,23 +79,6 @@ def find_centroids(img_frame, camera=cam):
     return centers
 
 def compare_centroids(frame1, frame2):
-    # check if same between frames but also in intersection of frames
-    # TODO: make this independent function
-    frame_width = cam.width*cam.ifov
-    frame_height = cam.width*cam.ifov
-
-    ra_int_1 = interval[frame1.attitude_ra-frame_width/2,
-                frame1.attitude_ra+frame_width/2]
-    de_int_1 = interval[frame1.attitude_de-frame_height/2,
-                frame1.attitude_de+frame_height/2]
-    ra_int_2 = interval[frame2.attitude_ra-frame_width/2,
-                frame2.attitude_ra+frame_width/2]
-    de_int_2 = interval[frame2.attitude_de-frame_height/2,
-                frame2.attitude_de+frame_height/2]
-
-    ra_intrsc = ra_int_1&ra_int_2
-    de_intrsc = de_int_1&de_int_2
-
     # Union of frames (TODO: Implement kd tree maybe)
     union = list(frame1)
     for new in frame2:
@@ -113,10 +96,6 @@ def compare_centroids(frame1, frame2):
             # Shouldn't go higher than this state
             # if c2.state > Centroid.S_TARGET:
                 # c2.state = Centroid.S_TARGET
-
-            if new.state < Centroid.S_CANDIDATE \
-                and new.is_in_interval(ra_intrsc, de_intrsc):
-                new.state += 1
             union.append(new)
 
         # Return if candidate
@@ -124,6 +103,33 @@ def compare_centroids(frame1, frame2):
             # candidates.append(c2)
         # Or return all
     return union
+
+def check_for_candidates(unknowns, frame1, frame2):
+    # check if found potential candidates are in intersection of frames
+    # TODO: make this independent function
+    frame_width = cam.width*cam.ifov
+    frame_height = cam.width*cam.ifov
+
+    ra_int_1 = interval[frame1.attitude_ra-frame_width/2,
+                frame1.attitude_ra+frame_width/2]
+    de_int_1 = interval[frame1.attitude_de-frame_height/2,
+                frame1.attitude_de+frame_height/2]
+    ra_int_2 = interval[frame2.attitude_ra-frame_width/2,
+                frame2.attitude_ra+frame_width/2]
+    de_int_2 = interval[frame2.attitude_de-frame_height/2,
+                frame2.attitude_de+frame_height/2]
+
+    ra_intrsc = ra_int_1&ra_int_2
+    de_intrsc = de_int_1&de_int_2
+
+    for c in unknowns:
+        if c.state < Centroid.S_CANDIDATE \
+            and c.state >= Centroid.S_UNKNOWN \
+            and c.is_in_interval(ra_intrsc, de_intrsc):
+            c.state += 1
+
+    return unknowns
+
 
 def find_candidates(centroids):
     candidates = []
@@ -138,6 +144,20 @@ def find_stars(centroids):
         if c.state == Centroid.S_STAR:
             stars.append(c)
     return stars
+
+def find_targets(centroids):
+    targets = []
+    for c in centroids:
+        if c.state == Centroid.S_TARGET:
+            targets.append(c)
+    return targets
+
+def find_unknowns(centroids):
+    unknowns = []
+    for c in centroids:
+        if c.state == Centroid.S_UNKNOWN:
+            unknowns.append(c)
+    return unknowns
 
 def plot_centroids(input_img, centroids, write=False):
 

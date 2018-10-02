@@ -43,6 +43,7 @@ def find_target(frames, window=2):
     for idx in range(1, n_frames): # TODO: implement variable window
 
         acc = centroid.compare_centroids(acc, centroids[idx])
+        acc = centroid.check_for_candidates(acc, frames[idx-1], frames[idx])
         spr = Frame.superimpose(spr, frames[idx])
         print("No of centroids: ", len(acc))
         centroid.plot_centroids(spr.px, acc, write=False)
@@ -126,10 +127,12 @@ def main():
                     dct_lst[cand.frame_id]["attitude_de"])
 
         print("frame: ", cand.frame_id,
-                "\ttra: ", math.degrees(cand.cRA),
+                "\tsra: ", attitude[0],
+                "\t\t\tsde: ", attitude[1],
+                "\n\t\ttra: ", math.degrees(cand.cRA),
                 "\ttde: ", math.degrees(cand.cDE),
                 "\n\t\ttra':", (dct_lst[cand.frame_id]["target_ra"]),
-                "\ttde':", (dct_lst[cand.frame_id]["target_de"]))
+                "\t\t\ttde':", (dct_lst[cand.frame_id]["target_de"]))
     # track_target(tgt_history, imgs[i])
 
 
