@@ -38,15 +38,17 @@ def find_target(frames, window=2):
     # spr = empty_frame
     acc = centroids[0]
     spr = frames[0]
-
-    centroid.plot_centroids(spr.px, acc, write=False)
+    spr.plot_frame(acc, write=False)
+    # centroid.plot_centroids(spr.px, acc, write=False)
     for idx in range(1, n_frames): # TODO: implement variable window
 
         acc = centroid.compare_centroids(acc, centroids[idx])
         acc = centroid.check_for_candidates(acc, frames[idx-1], frames[idx])
-        spr = Frame.superimpose(spr, frames[idx])
+        frames[idx].plot_frame(acc, write=False)
+
+        # spr = Frame.superimpose(spr, frames[idx])
         print("No of centroids: ", len(acc))
-        centroid.plot_centroids(spr.px, acc, write=False)
+        # centroid.plot_centroids(spr.px, acc, write=False)
     # TODO: THINK about this better
     # This is only temporary
     # if there is one candidate, that's the target
@@ -65,6 +67,16 @@ def find_target(frames, window=2):
     # centroid.plot_centroids(imgs[idx+1], centroids[idx+1])
 
     return acc, target_found
+
+def label_candidates(centroids, n_frames):
+    from sklearn.cluster import DBSCAN
+
+    # TODO: put centroids in 3D or 4D (quaternions) to need no angle-wrapping
+    # TODO: change centroid.Centroid equals to reflect that
+    # TODO: allow roll rotations
+    # TODO: test if point is in rectangle (maybe rotated) rather than just the
+    # intervals
+    clustering = DBSCAN(eps=0.5, min_samples=2, leaf_size=n_frames)
 
 def track_target(tgt_hist, img):
     # at this point more like plotting than tracking
@@ -128,7 +140,7 @@ def main():
 
         print("frame: ", cand.frame_id,
                 "\tsra: ", attitude[0],
-                "\t\t\tsde: ", attitude[1],
+                "\t\tsde: ", attitude[1],
                 "\n\t\ttra: ", math.degrees(cand.cRA),
                 "\ttde: ", math.degrees(cand.cDE),
                 "\n\t\ttra':", (dct_lst[cand.frame_id]["target_ra"]),

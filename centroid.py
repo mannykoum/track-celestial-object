@@ -31,12 +31,14 @@ class Centroid:
     ERROR = 0.000001
 
     def __init__(self, cx, cy, att=(0,0), state=S_UNKNOWN, frame_id=0):
+        # pixel data (should really choose a better name)
         self.cX = cx
         self.cY = cy
         # TODO: make it less naive and solve angle wrap
         # self.cRA, self.cDE
         # TODO: this assumes att is the right bottom corner
         # relative to the center of the frame
+        # assumes same angular scale (only works for small fov)
         self.cRA = -(cx-cam.width/2)*cam.ifov + att[0]
         self.cDE = -(cy-cam.height/2)*cam.ifov + att[1]
         self.state = state
@@ -47,9 +49,12 @@ class Centroid:
         return abs(self.cRA-other.cRA) <= self.ERROR and \
                 abs(self.cDE-other.cDE) <= self.ERROR
 
-    # TODO: angle-wrapping
+    # TODO: angle-wrapping and ROLL polygon
     def is_in_interval(self, ra_int, de_int):
         return (self.cRA in ra_int) and (self.cDE in de_int)
+
+    def is_in_frame(self, frame):
+        return self.is_in_interval(frame.ra_int, frame.de_int)
 
     def get_pix(self):
         return (self.cX, self.cY)
@@ -106,7 +111,7 @@ def compare_centroids(frame1, frame2):
 
 def check_for_candidates(unknowns, frame1, frame2):
     # check if found potential candidates are in intersection of frames
-    # TODO: make this independent function
+    # TODO: make this check frame properly it only works for 0 roll now
     frame_width = cam.width*cam.ifov
     frame_height = cam.width*cam.ifov
 
@@ -159,28 +164,38 @@ def find_unknowns(centroids):
             unknowns.append(c)
     return unknowns
 
-def plot_centroids(input_img, centroids, write=False):
+def plot_centroids(input_img, centroids, write=False, frame_no=None,
+        frame_att=None):
 
     img = cv2.cvtColor(input_img, cv2.COLOR_GRAY2BGR)
 
     for c in centroids:
         if c.state == Centroid.S_STAR:
             cv2.circle(img, (c.cX, c.cY), 10, (0, 0, 200), 1)
-            cv2.putText(img, "star", (c.cX - 25, c.cY - 25),
+            cv2.putText(img, "star", (c.cX + 25, c.cY - 25),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 200), 2)
         elif c.state == Centroid.S_UNKNOWN:
             cv2.circle(img, (c.cX, c.cY), 10, (250, 250, 250), 1)
-            cv2.putText(img, "unknown", (c.cX - 25, c.cY - 25),
+            cv2.putText(img, "unknown", (c.cX + 25, c.cY - 25),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.5, (250, 250, 250), 2)
         elif c.state == Centroid.S_CANDIDATE:
             cv2.circle(img, (c.cX, c.cY), 10, (10, 200, 200), 1)
-            cv2.putText(img, "candidate", (c.cX - 25, c.cY - 25),
+            cv2.putText(img, "candidate", (c.cX + 25, c.cY - 25),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.5, (10, 200, 200), 2)
         elif c.state == Centroid.S_TARGET:
             cv2.circle(img, (c.cX, c.cY), 10, (10, 255, 50), 1)
-            cv2.putText(img, "target", (c.cX - 25, c.cY - 25),
+            cv2.putText(img, "target", (c.cX + 25, c.cY - 25),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.5, (10, 255, 50), 2)
 
+    if frame_no != None:
+        cv2.putText(img, "Frame #"+str(frame_no),(25, 25),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2)
+    if frame_att != None:
+        frame_att = (math.degrees(frame_att[0]), math.degrees(frame_att[1]))
+        cv2.putText(img, f"Satellite RA (deg): {frame_att[0]:.2f}", (25, 55),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2)
+        cv2.putText(img, f"Satellite DE (deg): {frame_att[1]:.2f}", (25, 85),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2)
     # display the image
     cv2.imshow("Image", img)
     cv2.waitKey(0)

@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 import image_read as imr
+import centroid
+from interval import interval
 import numpy as np
 import cv2
 import math
@@ -13,6 +15,19 @@ class Frame:
         self.target_ra = math.radians(dct["target_ra"])
         self.target_de = math.radians(dct["target_de"])
         self.id = dct["idx"]
+        # self.centroids = []
+        # self.centroids = centroid.find_centroids(self)
+        self.ra_int = interval[self.attitude_ra - centroid.cam.ifov*self.height/2,
+                            self.attitude_ra + centroid.cam.ifov*self.height/2]
+        self.de_int = interval[self.attitude_de - centroid.cam.ifov*self.width/2,
+                            self.attitude_de + centroid.cam.ifov*self.width/2]
+
+    # because of above lines it only works for 0 roll now
+    def plot_frame(self, centroids, write=False):
+        centroids_to_plot = [c for c in centroids if c.is_in_frame(self)]
+        centroid.plot_centroids(self.px, centroids_to_plot, frame_no=self.id,
+                frame_att=(self.attitude_ra, self.attitude_de), write=write)
+
     @staticmethod
     def superimpose(frame1, frame2, att_change=0):
         if att_change==0:
