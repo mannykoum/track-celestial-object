@@ -10,6 +10,7 @@ def parse_fname(filename, idx = 0):
     filename = filename.split('_')
     return {"attitude_ra": float(filename[2]),
             "attitude_de": float(filename[4]),
+            "attitude_roll": float(0.0),
             "target_ra": float(filename[7]),
             "target_de": float(filename[9]),
             "idx": idx}

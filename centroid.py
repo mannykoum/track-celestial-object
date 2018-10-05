@@ -1,7 +1,10 @@
 #!/usr/bin/env python3
 import numpy as np
+import quaternion
+from scipy.spatial import distance
 from datetime import datetime
 from frame import Frame
+import utils
 from interval import interval, inf, imath
 import math
 import cv2
@@ -30,24 +33,31 @@ class Centroid:
 
     ERROR = 0.000001
 
-    def __init__(self, cx, cy, att=(0,0), state=S_UNKNOWN, frame_id=0):
+    def __init__(self, cx, cy, att=(0,0,0), state=S_UNKNOWN, frame_id=0):
+    # def __init__(self, cx, cy, quat, att=(0,0,0), state=S_UNKNOWN, frame_id=0):
         # pixel data (should really choose a better name)
         self.cX = cx
         self.cY = cy
         # TODO: make it less naive and solve angle wrap
         # self.cRA, self.cDE
-        # TODO: this assumes att is the right bottom corner
         # relative to the center of the frame
         # assumes same angular scale (only works for small fov)
         self.cRA = -(cx-cam.width/2)*cam.ifov + att[0]
         self.cDE = -(cy-cam.height/2)*cam.ifov + att[1]
+        # position on the unit sphere relative
+        self.pos = utils.matrix_rotation(att,
+                utils.pix2cart_unit(cx, cy, cam.ifov, cam.width, cam.height))
+        # conj = quat.conjugate()
+        # self.pos = quat * \
+            # utils.pix2cart_unit(cx, cy, cam.ifov, cam.width, cam.height) * \
+            # conj
         self.state = state
         self.frame_id = frame_id
 
     def equals(self, other):
-        # TODO: make it about angles
-        return abs(self.cRA-other.cRA) <= self.ERROR and \
-                abs(self.cDE-other.cDE) <= self.ERROR
+        # return abs(self.cRA-other.cRA) <= self.ERROR and \
+            # abs(self.cDE-other.cDE) <= self.ERROR
+        return distance.euclidean(self.pos, other.pos) <= self.ERROR
 
     # TODO: angle-wrapping and ROLL polygon
     def is_in_interval(self, ra_int, de_int):
@@ -78,8 +88,14 @@ def find_centroids(img_frame, camera=cam):
         cX = int(M["m10"] / M["m00"])
         cY = int(M["m01"] / M["m00"])
         centers.append(Centroid(cX, cY,
-                        att=(img_frame.attitude_ra, img_frame.attitude_de),
+                        # img_frame.attitude_quaternion,
+                        att=(img_frame.attitude_ra,
+                            img_frame.attitude_de,
+                            img_frame.attitude_roll),
                         frame_id=img_frame.id))
+        # centers.append(Centroid(cX, cY,
+                        # att=img_frame.attitude_quaternion,
+                        # frame_id=img_frame.id))
 
     return centers
 

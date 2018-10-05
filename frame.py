@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import image_read as imr
 import centroid
+import utils
 from interval import interval
 import numpy as np
 import cv2
@@ -12,6 +13,14 @@ class Frame:
         self.height, self.width = arr.shape
         self.attitude_ra = math.radians(dct["attitude_ra"])
         self.attitude_de = math.radians(dct["attitude_de"])
+        self.attitude_roll = math.radians(dct["attitude_roll"])
+        self.attitude_quaternion = utils.euler2quaternion(
+                np.array([
+                    self.attitude_ra,
+                    self.attitude_de,
+                    self.attitude_roll
+                ])
+                )
         self.target_ra = math.radians(dct["target_ra"])
         self.target_de = math.radians(dct["target_de"])
         self.id = dct["idx"]
